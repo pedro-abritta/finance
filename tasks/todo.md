@@ -14,54 +14,46 @@ Tela completa entregue. Templates de despesa e renda gerenciados via duas abas. 
 - `components/feature/RecurringTemplateDialog.tsx` — dialog com campos condicionais por type
 - `app/(app)/recorrentes/page.tsx` — página com abas chip-style
 
----
-
-# Phase 4 — Section 4.3: Confirmação mensal de recorrentes
-
-Fluxo de confirmação: no início de cada mês, o usuário revisa os templates ativos e confirma quais lançamentos devem ser efetivados. Templates confirmados viram despesas reais (tabela `expenses`) ou entradas de renda (tabela `income_entries`).
+**Next:** Section 4.3 — confirmação mensal de recorrentes + lançamento de renda.
 
 ---
 
-## Escopo
+# Phase 4 — Section 4.3: Confirmação mensal de recorrentes (revertido)
 
-- Confirmar lançamentos de templates ativos para o mês corrente
-- Templates de despesa → `createExpense` (já existe)
-- Templates de renda → `createIncomeEntry` (a criar, tabela `income_entries` da fase 4.1)
-- Registro de confirmação em `recurring_confirmations` para evitar duplicatas no mesmo mês
-- Lançamento manual avulso de renda (fora de templates)
+Implementação original: fluxo de confirmação manual mensal (aba "Este mês" em `/recorrentes`, `ConfirmTemplateDialog`, `recurring_confirmations`) + lançamento avulso de renda via dialog dedicado.
 
----
+**Pivô de escopo:** o fluxo de confirmação manual e o dialog de lançamento de renda foram removidos. Lançamento avulso (despesa/renda, único ou recorrente) passou a ser coberto pela página `/novo` (`NewEntryForm`), tornando a confirmação manual redundante.
 
-## Checklist de Execução
+**Removido:**
+- Aba "Este mês" e toda a lógica de confirmação (`app/(app)/recorrentes/page.tsx`)
+- `components/feature/ConfirmTemplateDialog.tsx` (deletado)
+- `components/feature/IncomeEntryDialog.tsx` (deletado — redundante com `/novo`)
+- `lib/db/recurring-confirmations.ts` (deletado — sem consumidores)
+- `RecurringConfirmation` em `lib/types.ts` (deletado)
+- Botão "Lançar renda"
 
-### A. DB — `lib/db/income-entries.ts` e `lib/db/recurring-confirmations.ts`
+**Mantido em `/recorrentes`:** lista de templates (abas Despesas/Renda), toggle ativar/desativar, editar, excluir.
 
-- [ ] `getIncomeEntries(month: string)` — retorna entradas do mês
-- [ ] `createIncomeEntry(input)` — INSERT em `income_entries`
-- [ ] `getConfirmationsForMonth(month: string)` — quais templates já foram confirmados
-- [ ] `confirmRecurringTemplate(templateId, month)` — INSERT em `recurring_confirmations` + cria expense/income entry
-
-### B. Tela de confirmação — seção na página `/recorrentes`
-
-- [ ] Nova aba ou seção "Este mês" na página existente
-- [ ] Lista templates ativos com status: **pendente** / **confirmado** para o mês atual
-- [ ] Botão "Confirmar" por template → chama `confirmRecurringTemplate` → marca como confirmado
-- [ ] Templates já confirmados exibem data/valor lançado (read-only)
-- [ ] Confirmação de despesa usa `amount` do template (editável antes de confirmar?)
-
-### C. Lançamento manual de renda avulsa
-
-- [ ] Botão "Lançar renda" na aba Renda da página `/recorrentes` (ou em `/despesas`)
-- [ ] Dialog simples: description, amount, category (INCOME_CATEGORIES), date
-- [ ] Chama `createIncomeEntry` diretamente (sem template)
-
-### D. Verificação
-
-- [ ] Confirmar template de despesa → aparece em `/despesas` no mês correto
-- [ ] Confirmar template de renda → aparece no dashboard como entrada
-- [ ] Tentar confirmar o mesmo template duas vezes no mesmo mês → bloqueado
-- [ ] Lançar renda avulsa → visível no histórico
+**Nota:** a tabela `recurring_confirmations` permanece no schema do Supabase (não foi dropada) — apenas o código client não a referencia mais.
 
 ---
 
-**Aguardando aprovação para iniciar 4.3.**
+**Seção 4.3 encerrada com escopo reduzido.** Próximo: revisar Fase 5 (Dashboard) quando aprovado.
+
+---
+
+# Phase 4 — Seção C: Geração automática de recorrentes
+
+**Lógica:** ao criar um template recorrente (`/novo`), nenhum lançamento é criado imediatamente — só o template. A geração roda ao carregar o dashboard: para cada template ativo, se `day_of_month <= dia atual do mês corrente` e ainda não existe `recurring_confirmations` para template+mês, cria a despesa/renda e registra a confirmação. Templates com `day_of_month` futuro não geram nada ainda (previsto, não realizado).
+
+**Verificado antes de implementar:** `NewEntryForm.tsx` já chamava só `createRecurringTemplate` para recorrentes — nenhuma mudança necessária lá.
+
+**Schema `recurring_confirmations` (confirmado pelo usuário):** `id`, `user_id`, `recurring_template_id`, `month` (date, `YYYY-MM-01`), `confirmed_at` (timestamptz), `expense_id` (nullable), `income_entry_id` (nullable).
+
+**Arquivos:**
+- [x] `lib/db/recurring-confirmations.ts` — recriado: `getConfirmedTemplateIds(month)` e `createConfirmation(...)`.
+- [x] `lib/recurring-generation.ts` — novo: `generateDueRecurringEntries()`, filtra templates ativos + `dayOfMonth <= dia atual` + sem confirmação no mês, cria despesa/renda e grava confirmação.
+- [x] `app/(app)/page.tsx` — dashboard chama `generateDueRecurringEntries()` uma vez por montagem (guardado por `useRef`), antes do primeiro fetch de despesas do mês corrente, para os itens gerados aparecerem já na carga inicial.
+- [x] `npx tsc --noEmit` e `npm run lint` limpos.
+
+**Pendente de verificação manual:** rodar `npm run dev`, criar um template com `day_of_month <= hoje`, confirmar que aparece uma despesa/renda no dashboard e uma linha em `recurring_confirmations`; criar outro com `day_of_month` futuro e confirmar que nada é gerado.

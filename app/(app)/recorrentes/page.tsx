@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
 import { getRecurringTemplates } from "@/lib/db/recurring-templates";
 import { getCreditCards } from "@/lib/db/credit-cards";
 import { RecurringTemplateItem } from "@/components/feature/RecurringTemplateItem";
@@ -15,11 +14,12 @@ export default function RecorrentesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<RecurringType>("expense");
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<RecurringTemplate | undefined>(undefined);
-  const [dialogDefaultType, setDialogDefaultType] = useState<RecurringType>("expense");
 
-  async function reload() {
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<RecurringTemplate | undefined>(undefined);
+  const [templateDialogDefaultType, setTemplateDialogDefaultType] = useState<RecurringType>("expense");
+
+  async function reloadTemplates() {
     try {
       const data = await getRecurringTemplates();
       setTemplates(data);
@@ -48,16 +48,10 @@ export default function RecorrentesPage() {
     load();
   }, []);
 
-  function openNew(type: RecurringType) {
-    setEditingTemplate(undefined);
-    setDialogDefaultType(type);
-    setDialogOpen(true);
-  }
-
-  function openEdit(template: RecurringTemplate) {
+  function openEditTemplate(template: RecurringTemplate) {
     setEditingTemplate(template);
-    setDialogDefaultType(template.type);
-    setDialogOpen(true);
+    setTemplateDialogDefaultType(template.type);
+    setTemplateDialogOpen(true);
   }
 
   const filtered = templates.filter(t => t.type === activeTab);
@@ -69,20 +63,13 @@ export default function RecorrentesPage() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="px-6 py-5 border-thin border-b border-gray-200 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-500 text-gray-900">Recorrentes</h1>
-          <p className="text-xs text-gray-500 mt-0.5">Templates de despesas e renda mensais</p>
-        </div>
-        <button
-          onClick={() => openNew(activeTab)}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm bg-primary text-white rounded-md hover:bg-primary/90 transition-colors"
-        >
-          <Plus size={14} />
-          Novo template
-        </button>
+      {/* Header */}
+      <div className="px-6 py-5 border-thin border-b border-gray-200">
+        <h1 className="text-lg font-500 text-gray-900">Recorrentes</h1>
+        <p className="text-xs text-gray-500 mt-0.5">Templates de despesas e renda mensais</p>
       </div>
 
+      {/* Tabs */}
       <div className="px-6 pt-4 pb-2 flex gap-2">
         {tabs.map(tab => (
           <button
@@ -100,6 +87,7 @@ export default function RecorrentesPage() {
         ))}
       </div>
 
+      {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 py-2">
         {loading && (
           <p className="text-sm text-gray-500 py-8 text-center">Carregando...</p>
@@ -118,9 +106,9 @@ export default function RecorrentesPage() {
                 <RecurringTemplateItem
                   key={template.id}
                   template={template}
-                  onEdit={() => openEdit(template)}
-                  onDelete={reload}
-                  onToggle={reload}
+                  onEdit={() => openEditTemplate(template)}
+                  onDelete={reloadTemplates}
+                  onToggle={reloadTemplates}
                 />
               ))
             )}
@@ -129,12 +117,12 @@ export default function RecorrentesPage() {
       </div>
 
       <RecurringTemplateDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        open={templateDialogOpen}
+        onOpenChange={setTemplateDialogOpen}
         template={editingTemplate}
-        defaultType={dialogDefaultType}
+        defaultType={templateDialogDefaultType}
         cards={cards}
-        onSuccess={reload}
+        onSuccess={reloadTemplates}
       />
     </div>
   );

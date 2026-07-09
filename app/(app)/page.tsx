@@ -15,10 +15,11 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getExpenses } from "@/lib/db/expenses";
 import { getCreditCards } from "@/lib/db/credit-cards";
 import { getInvoices } from "@/lib/db/invoices";
+import { generateDueRecurringEntries } from "@/lib/recurring-generation";
 import type { Expense, CreditCard, Invoice } from "@/lib/types";
 
 
@@ -29,15 +30,24 @@ export default function Dashboard() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const generatedRef = useRef(false);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
-    Promise.all([
-      getExpenses(currentMonth.getFullYear(), currentMonth.getMonth()),
-      getCreditCards(),
-      getInvoices(),
-    ])
+    const ready = generatedRef.current
+      ? Promise.resolve()
+      : generateDueRecurringEntries().catch(() => {});
+
+    ready
+      .then(() => {
+        generatedRef.current = true;
+        return Promise.all([
+          getExpenses(currentMonth.getFullYear(), currentMonth.getMonth()),
+          getCreditCards(),
+          getInvoices(),
+        ]);
+      })
       .then(([e, c, i]) => { setExpenses(e); setCards(c); setInvoices(i); })
       .catch(() => setError("Erro ao carregar dados."))
       .finally(() => setLoading(false));

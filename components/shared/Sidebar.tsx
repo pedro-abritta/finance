@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Home, TrendingDown, CreditCard, RefreshCw, TrendingUp, FileText } from "lucide-react";
+import { Home, TrendingDown, CreditCard, RefreshCw, TrendingUp, FileText, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: Home },
+  { href: "/novo", label: "Novo", icon: Plus },
   { href: "/despesas", label: "Despesas", icon: TrendingDown },
   { href: "/cartoes", label: "Cartões", icon: CreditCard },
   { href: "/recorrentes", label: "Recorrentes", icon: RefreshCw },
