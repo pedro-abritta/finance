@@ -5,7 +5,7 @@ import { MonthSelector } from "@/components/shared/MonthSelector";
 import { ExpenseItem } from "@/components/feature/ExpenseItem";
 import { CardItem } from "@/components/feature/CardItem";
 import { Mascot } from "@/components/shared/Mascot";
-import { formatCurrency, buildUsedByCardId } from "@/lib/utils";
+import { formatCurrency, buildUsedByCardId, cn } from "@/lib/utils";
 import {
   LineChart,
   Line,
@@ -17,17 +17,26 @@ import {
 } from "recharts";
 import { useState, useEffect, useRef } from "react";
 import { getExpenses } from "@/lib/db/expenses";
+import { getIncomeEntries } from "@/lib/db/income-entries";
 import { getCreditCards } from "@/lib/db/credit-cards";
 import { getInvoices } from "@/lib/db/invoices";
 import { generateDueRecurringEntries } from "@/lib/recurring-generation";
-import type { Expense, CreditCard, Invoice } from "@/lib/types";
+import { getRecurringTemplates } from "@/lib/db/recurring-templates";
+import { getConfirmedTemplateKeys } from "@/lib/db/recurring-confirmations";
+import { getRecurringForecast, type ForecastEntry } from "@/lib/recurring-forecast";
+import type { Expense, IncomeEntry, CreditCard, Invoice } from "@/lib/types";
 
+function pad(n: number): string {
+  return String(n).padStart(2, "0");
+}
 
 export default function Dashboard() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [incomeEntries, setIncomeEntries] = useState<IncomeEntry[]>([]);
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [forecast, setForecast] = useState<ForecastEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const generatedRef = useRef(false);
@@ -39,16 +48,28 @@ export default function Dashboard() {
       ? Promise.resolve()
       : generateDueRecurringEntries().catch(() => {});
 
+    const today = new Date();
+    const todayFireMonth = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-01`;
+
     ready
       .then(() => {
         generatedRef.current = true;
         return Promise.all([
           getExpenses(currentMonth.getFullYear(), currentMonth.getMonth()),
+          getIncomeEntries(currentMonth.getFullYear(), currentMonth.getMonth()),
           getCreditCards(),
           getInvoices(),
+          getRecurringTemplates(),
+          getConfirmedTemplateKeys(todayFireMonth, todayFireMonth),
         ]);
       })
-      .then(([e, c, i]) => { setExpenses(e); setCards(c); setInvoices(i); })
+      .then(([e, inc, c, i, templates, confirmedKeys]) => {
+        setExpenses(e);
+        setIncomeEntries(inc);
+        setCards(c);
+        setInvoices(i);
+        setForecast(getRecurringForecast(templates, c, confirmedKeys, today, 1));
+      })
       .catch(() => setError("Erro ao carregar dados."))
       .finally(() => setLoading(false));
   }, [currentMonth]);
@@ -56,6 +77,23 @@ export default function Dashboard() {
   const usedByCardId = buildUsedByCardId(invoices);
 
   const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const totalIncome = incomeEntries.reduce((sum, entry) => sum + entry.amount, 0);
+  const saldo = totalIncome - totalExpenses;
+
+  const today = new Date();
+  const isRealCurrentMonth =
+    currentMonth.getFullYear() === today.getFullYear() && currentMonth.getMonth() === today.getMonth();
+  const todayFireMonth = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-01`;
+  const forecastExpenseTotal = isRealCurrentMonth
+    ? forecast
+        .filter((f) => f.type === "expense" && f.competenceMonth === todayFireMonth)
+        .reduce((sum, f) => sum + f.amount, 0)
+    : 0;
+  const forecastIncomeTotal = isRealCurrentMonth
+    ? forecast
+        .filter((f) => f.type === "income" && f.competenceMonth === todayFireMonth)
+        .reduce((sum, f) => sum + f.amount, 0)
+    : 0;
 
   const weeklyData = [
     { name: "Sem 1", valor: 0 },
@@ -118,6 +156,56 @@ export default function Dashboard() {
                   : "—"}
               </h3>
             </div>
+          </div>
+
+          {/* Este mês */}
+          <div className="p-6 bg-white border-thin border border-gray-200 rounded-lg">
+            <h2 className="text-sm font-600 text-gray-900 mb-4">Este mês</h2>
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-gray-50 rounded-md">
+                    <p className="text-xs text-gray-600 mb-2">Ganhos</p>
+                    <h3 className="text-2xl font-600 text-gray-900">
+                      {formatCurrency(totalIncome)}
+                    </h3>
+                    {forecastIncomeTotal > 0 && (
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        + {formatCurrency(forecastIncomeTotal)} previsto
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="p-4 bg-gray-50 rounded-md">
+                    <p className="text-xs text-gray-600 mb-2">Despesas</p>
+                    <h3 className="text-2xl font-600 text-gray-900">
+                      {formatCurrency(totalExpenses)}
+                    </h3>
+                    {forecastExpenseTotal > 0 && (
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        + {formatCurrency(forecastExpenseTotal)} previsto
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center pt-4 mt-4 border-t border-gray-100">
+                  <span className="text-sm text-gray-600">Saldo</span>
+                  <span
+                    className={cn(
+                      "text-sm font-500",
+                      saldo >= 0 ? "text-success" : "text-danger"
+                    )}
+                  >
+                    {formatCurrency(saldo)}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Charts Section */}

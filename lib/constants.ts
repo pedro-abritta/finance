@@ -20,6 +20,19 @@ export const EXPENSE_CATEGORIES = {
   DIVERSOS: "Diversos",
 } as const;
 
+export const EXPENSE_CATEGORY_COLORS: Record<string, string> = {
+  ALIMENTACAO: "bg-blue-500",
+  TRANSPORTE: "bg-green-500",
+  SAUDE: "bg-red-500",
+  EDUCACAO: "bg-yellow-500",
+  LAZER: "bg-purple-500",
+  MORADIA: "bg-orange-500",
+  UTILIDADES: "bg-cyan-500",
+  TELEFONE: "bg-pink-500",
+  SEGUROS: "bg-indigo-500",
+  DIVERSOS: "bg-gray-500",
+};
+
 export const IR_CATEGORIES = {
   ALUGUEL: "Aluguel",
   MATERIAL: "Material de Consumo",

@@ -1,7 +1,7 @@
 "use client";
 
 import { Expense } from "@/lib/types";
-import { EXPENSE_CATEGORIES } from "@/lib/constants";
+import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_COLORS } from "@/lib/constants";
 import { formatCurrency, formatDayMonth, cn } from "@/lib/utils";
 import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -17,19 +17,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-const categoryColors: Record<string, string> = {
-  ALIMENTACAO: "bg-blue-500",
-  TRANSPORTE: "bg-green-500",
-  SAUDE: "bg-red-500",
-  EDUCACAO: "bg-yellow-500",
-  LAZER: "bg-purple-500",
-  MORADIA: "bg-orange-500",
-  UTILIDADES: "bg-cyan-500",
-  TELEFONE: "bg-pink-500",
-  SEGUROS: "bg-indigo-500",
-  DIVERSOS: "bg-gray-500",
-};
-
 interface ExpenseItemProps {
   expense: Expense;
   onEdit?: () => void;
@@ -41,7 +28,7 @@ export function ExpenseItem({ expense, onEdit, onDelete }: ExpenseItemProps) {
   const [deleting, setDeleting] = useState(false);
 
   const categoryLabel = EXPENSE_CATEGORIES[expense.category as keyof typeof EXPENSE_CATEGORIES];
-  const dotColor = categoryColors[expense.category] || "bg-gray-500";
+  const dotColor = EXPENSE_CATEGORY_COLORS[expense.category] || "bg-gray-500";
   const installmentLabel =
     expense.isInstallment && expense.installmentNumber && expense.totalInstallments
       ? `parcela ${expense.installmentNumber}/${expense.totalInstallments}`

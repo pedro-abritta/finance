@@ -4,16 +4,28 @@ import { Header } from "@/components/shared/Header";
 import { MonthSelector } from "@/components/shared/MonthSelector";
 import { ExpenseItem } from "@/components/feature/ExpenseItem";
 import { ExpenseDialog } from "@/components/feature/ExpenseDialog";
+import { ForecastItem } from "@/components/feature/ForecastItem";
 import { Mascot } from "@/components/shared/Mascot";
 import { formatCurrency } from "@/lib/utils";
 import { Plus } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { getExpenses } from "@/lib/db/expenses";
+import { getRecurringTemplates } from "@/lib/db/recurring-templates";
+import { getCreditCards } from "@/lib/db/credit-cards";
+import { getConfirmedTemplateKeys } from "@/lib/db/recurring-confirmations";
+import { getRecurringForecast, type ForecastEntry } from "@/lib/recurring-forecast";
 import type { Expense } from "@/lib/types";
+
+const MONTHS_AHEAD = 6;
+
+function pad(n: number): string {
+  return String(n).padStart(2, "0");
+}
 
 export default function Despesas() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [forecast, setForecast] = useState<ForecastEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,8 +35,21 @@ export default function Despesas() {
   const refresh = useCallback(() => {
     setLoading(true);
     setError(null);
-    getExpenses(currentMonth.getFullYear(), currentMonth.getMonth())
-      .then(setExpenses)
+    const today = new Date();
+    const horizonEnd = new Date(today.getFullYear(), today.getMonth() + MONTHS_AHEAD - 1, 1);
+    const fromMonth = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-01`;
+    const toMonth = `${horizonEnd.getFullYear()}-${pad(horizonEnd.getMonth() + 1)}-01`;
+
+    Promise.all([
+      getExpenses(currentMonth.getFullYear(), currentMonth.getMonth()),
+      getRecurringTemplates(),
+      getCreditCards(),
+      getConfirmedTemplateKeys(fromMonth, toMonth),
+    ])
+      .then(([exp, templates, cards, confirmedKeys]) => {
+        setExpenses(exp);
+        setForecast(getRecurringForecast(templates, cards, confirmedKeys, today, MONTHS_AHEAD));
+      })
       .catch(() => setError("Erro ao carregar despesas."))
       .finally(() => setLoading(false));
   }, [currentMonth]);
@@ -32,6 +57,11 @@ export default function Despesas() {
   useEffect(() => { refresh(); }, [refresh]);
 
   const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+
+  const selectedCompetenceMonth = `${currentMonth.getFullYear()}-${pad(currentMonth.getMonth() + 1)}-01`;
+  const forecastedExpenses = forecast.filter(
+    (e) => e.type === "expense" && e.competenceMonth === selectedCompetenceMonth
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -85,6 +115,21 @@ export default function Despesas() {
             <div className="text-center py-16 bg-white border-thin border border-gray-200 rounded-lg">
               <Mascot size="lg" />
               <p className="text-sm text-gray-500 mt-4">Nenhuma despesa registrada neste mês</p>
+            </div>
+          )}
+
+          {!loading && !error && forecastedExpenses.length > 0 && (
+            <div className="mt-6 bg-white border-thin border border-gray-200 rounded-lg overflow-hidden">
+              <div className="px-4 py-3 bg-gray-50 border-thin border-b border-gray-200">
+                <p className="text-xs font-600 text-gray-600 uppercase">
+                  {forecastedExpenses.length} previsto{forecastedExpenses.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {forecastedExpenses.map((entry) => (
+                  <ForecastItem key={entry.templateId} entry={entry} />
+                ))}
+              </div>
             </div>
           )}
         </div>
